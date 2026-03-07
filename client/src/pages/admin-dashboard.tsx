@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
-import { useClients, useCreateClient, useDeleteClient } from "@/hooks/use-clients";
-import { useTransactions, useUpdateTransactionStatus } from "@/hooks/use-transactions";
+import { useClients, useCreateClient, useDeleteClient, useUpdateClient } from "@/hooks/use-clients";
+import { useTransactions, useUpdateTransactionStatus, useUpdateTransaction } from "@/hooks/use-transactions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { truncateAddress } from "@/lib/helpers";
-import { Plus, Users, CornerRightUp, Trash2, CheckCircle2, Clock, Copy } from "lucide-react";
+import { Plus, Users, CornerRightUp, Trash2, CheckCircle2, Clock, Copy, Edit2 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function AdminDashboard() {
@@ -19,10 +19,12 @@ export default function AdminDashboard() {
   const { data: transactions, isLoading: txLoading } = useTransactions();
   const createClient = useCreateClient();
   const deleteClient = useDeleteClient();
-  const updateTx = useUpdateTransactionStatus();
+  const updateTxStatus = useUpdateTransactionStatus();
   const { toast } = useToast();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editClientId, setEditClientId] = useState<string | null>(null);
+  const [editTxId, setEditTxId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     id: "",
     name: "",
@@ -31,6 +33,17 @@ export default function AdminDashboard() {
     feeWallet: "",
     feeAmount: ""
   });
+  const [editClientData, setEditClientData] = useState({
+    name: "",
+    eligibleAmount: ""
+  });
+  const [editTxData, setEditTxData] = useState({
+    amountPaid: "",
+    status: "pending"
+  });
+
+  const updateClient = useUpdateClient();
+  const updateTx = useUpdateTransaction();
 
   const handleCreateClient = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +69,49 @@ export default function AdminDashboard() {
     const url = `${window.location.origin}/u/${id}`;
     navigator.clipboard.writeText(url);
     toast({ title: "Link Copied", description: "Client portal URL copied to clipboard." });
+  };
+
+  const handleEditClient = (clientId: string) => {
+    const client = clients?.find(c => c.id === clientId);
+    if (client) {
+      setEditClientData({ name: client.name, eligibleAmount: client.eligibleAmount });
+      setEditClientId(clientId);
+    }
+  };
+
+  const handleSaveClientEdit = (clientId: string) => {
+    updateClient.mutate(
+      { id: clientId, data: editClientData },
+      {
+        onSuccess: () => {
+          toast({ title: "Client Updated", description: "Changes saved successfully." });
+          setEditClientId(null);
+        },
+        onError: (err) => {
+          toast({ variant: "destructive", title: "Error", description: err.message });
+        }
+      }
+    );
+  };
+
+  const handleEditTx = (tx: any) => {
+    setEditTxData({ amountPaid: tx.amountPaid, status: tx.status });
+    setEditTxId(tx.id);
+  };
+
+  const handleSaveTxEdit = (txId: number) => {
+    updateTx.mutate(
+      { id: txId, data: editTxData },
+      {
+        onSuccess: () => {
+          toast({ title: "Transaction Updated", description: "Changes saved successfully." });
+          setEditTxId(null);
+        },
+        onError: (err) => {
+          toast({ variant: "destructive", title: "Error", description: err.message });
+        }
+      }
+    );
   };
 
   return (
@@ -203,7 +259,15 @@ export default function AdminDashboard() {
                       <TableCell className="font-mono text-xs text-muted-foreground">{truncateAddress(client.ethWallet)}</TableCell>
                       <TableCell className="text-right text-primary font-mono">{client.eligibleAmount}</TableCell>
                       <TableCell className="text-right font-mono">{client.feeAmount}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2 flex justify-end">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={() => handleEditClient(client.id)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -259,16 +323,24 @@ export default function AdminDashboard() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2 flex justify-end">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={() => handleEditTx(tx)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
                         {tx.status === 'pending' && (
                           <Button 
                             variant="outline" 
                             size="sm"
                             className="border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-400"
-                            onClick={() => updateTx.mutate({ id: tx.id, status: 'confirmed' })}
-                            disabled={updateTx.isPending}
+                            onClick={() => updateTxStatus.mutate({ id: tx.id, status: 'confirmed' })}
+                            disabled={updateTxStatus.isPending}
                           >
-                            Mark Confirmed
+                            Confirm
                           </Button>
                         )}
                       </TableCell>
@@ -280,6 +352,102 @@ export default function AdminDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={editClientId !== null} onOpenChange={(open) => !open && setEditClientId(null)}>
+        <DialogContent className="bg-card border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>Update client details and eligible amount.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Client Name</Label>
+              <Input 
+                placeholder="John Doe" 
+                value={editClientData.name}
+                onChange={(e) => setEditClientData({...editClientData, name: e.target.value})}
+                className="bg-black/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Eligible Amount (ETH)</Label>
+              <Input 
+                type="number" 
+                step="any"
+                placeholder="10.5" 
+                value={editClientData.eligibleAmount}
+                onChange={(e) => setEditClientData({...editClientData, eligibleAmount: e.target.value})}
+                className="bg-black/50"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-4">
+              <Button 
+                variant="outline"
+                onClick={() => setEditClientId(null)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => editClientId && handleSaveClientEdit(editClientId)}
+                disabled={updateClient.isPending}
+                className="bg-primary text-black"
+              >
+                {updateClient.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Transaction Dialog */}
+      <Dialog open={editTxId !== null} onOpenChange={(open) => !open && setEditTxId(null)}>
+        <DialogContent className="bg-card border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Transaction</DialogTitle>
+            <DialogDescription>Update transaction amount and status.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Amount Paid (ETH)</Label>
+              <Input 
+                type="number" 
+                step="any"
+                placeholder="0.5" 
+                value={editTxData.amountPaid}
+                onChange={(e) => setEditTxData({...editTxData, amountPaid: e.target.value})}
+                className="bg-black/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <select 
+                value={editTxData.status}
+                onChange={(e) => setEditTxData({...editTxData, status: e.target.value})}
+                className="w-full px-3 py-2 bg-black/50 border border-border rounded-md text-foreground"
+              >
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end pt-4">
+              <Button 
+                variant="outline"
+                onClick={() => setEditTxId(null)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => editTxId && handleSaveTxEdit(editTxId)}
+                disabled={updateTx.isPending}
+                className="bg-primary text-black"
+              >
+                {updateTx.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

@@ -67,3 +67,26 @@ export function useDeleteClient() {
     },
   });
 }
+
+export function useUpdateClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ClientInput> }) => {
+      const url = buildUrl(api.clients.update.path, { id });
+      const res = await fetch(url, {
+        method: api.clients.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update client");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.clients.list.path] });
+    },
+  });
+}

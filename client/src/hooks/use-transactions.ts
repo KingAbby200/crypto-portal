@@ -63,3 +63,23 @@ export function useUpdateTransactionStatus() {
     },
   });
 }
+
+export function useUpdateTransaction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<TransactionInput> }) => {
+      const url = buildUrl(api.transactions.update.path, { id });
+      const res = await fetch(url, {
+        method: api.transactions.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update transaction");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.transactions.list.path] });
+    },
+  });
+}
