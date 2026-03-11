@@ -1,8 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import 'dotenv/config';
+import path from "path";
+import fs from "fs";
 import { registerRoutes } from "../server/routes";
-import { serveStatic } from "../server/static";
-import { VercelRequest, VercelResponse } from "@vercel/node";
 
 const app = express();
 
@@ -59,14 +59,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize routes and static serving once
+// Initialize routes once
 let initialized = false;
 
 async function initialize() {
   if (initialized) return;
   initialized = true;
 
-  // Create a dummy HTTP server for registerRoutes (it's not actually used in serverless)
+  // Create a dummy HTTP server for registerRoutes
   const { createServer } = await import("http");
   const httpServer = createServer(app);
 
@@ -84,32 +84,38 @@ async function initialize() {
 
     return res.status(status).json({ message });
   });
-
-  // Serve static files
-  serveStatic(app);
-
-  // Catch-all for client routes
-  app.use((req, res) => {
-    res.sendFile(`${__dirname}/public/index.html`);
-  });
 }
+
+// Static file serving for React app
+app.use(express.static(path.join(__dirname, "../dist/public"), {
+  maxAge: "1d",
+  etag: false
+}));
 
 // Vercel serverless handler
-export default async (req: VercelRequest, res: VercelResponse) => {
+export default async (req: any, res: any) => {
   await initialize();
-  app(req, res);
+
+  // Handle API routes through Express
+  if (req.url.startsWith("/api")) {
+    return app(req, res);
+  }
+
+  // Serve static assets
+  const filePath = path.join(__dirname, "../dist/public", req.url);
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+    return res.sendFile(filePath);
+  }
+
+  // Serve index.html for all other routes (SPA)
+  const indexPath = path.join(__dirname, "../dist/public/index.html");
+  if (fs.existsSync(indexPath)) {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.sendFile(indexPath);
+  }
+
+  // Fallback for API handling through Express
+  return app(req, res);
 };
 
-// For local development with `npm run start`
-if (process.env.NODE_ENV !== "production") {
-  (async () => {
-    await initialize();
-    const port = parseInt(process.env.PORT || "5000", 10);
-    const { createServer } = await import("http");
-    const server = createServer(app);
-    server.listen(port, "0.0.0.0", () => {
-      log(`serving on port ${port}`);
-    });
-  })();
-}
 
