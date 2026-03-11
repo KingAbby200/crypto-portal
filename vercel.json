@@ -8,17 +8,29 @@
   "functions": {
     "api/index.ts": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "dist/**"
     }
   },
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api/index.ts"
+      "destination": "/api"
     },
     {
-      "source": "/(.*)",
-      "destination": "/api/index.ts"
+      "source": "/:path*",
+      "destination": "/api"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/dist/public/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, immutable"
+        }
+      ]
     }
   ]
 }

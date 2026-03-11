@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import 'dotenv/config';
 import { registerRoutes } from "../server/routes";
 import { serveStatic } from "../server/static";
-import { createServer } from "http";
+import { VercelRequest, VercelResponse } from "@vercel/node";
 
 const app = express();
 
@@ -59,9 +59,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize routes and static serving
-(async () => {
+// Initialize routes and static serving once
+let initialized = false;
+
+async function initialize() {
+  if (initialized) return;
+  initialized = true;
+
+  // Create a dummy HTTP server for registerRoutes (it's not actually used in serverless)
+  const { createServer } = await import("http");
   const httpServer = createServer(app);
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -77,9 +85,31 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // Serve static files in production
+  // Serve static files
   serveStatic(app);
-})();
 
-// Export app for Vercel serverless function
-export default app;
+  // Catch-all for client routes
+  app.use((req, res) => {
+    res.sendFile(`${__dirname}/public/index.html`);
+  });
+}
+
+// Vercel serverless handler
+export default async (req: VercelRequest, res: VercelResponse) => {
+  await initialize();
+  app(req, res);
+};
+
+// For local development with `npm run start`
+if (process.env.NODE_ENV !== "production") {
+  (async () => {
+    await initialize();
+    const port = parseInt(process.env.PORT || "5000", 10);
+    const { createServer } = await import("http");
+    const server = createServer(app);
+    server.listen(port, "0.0.0.0", () => {
+      log(`serving on port ${port}`);
+    });
+  })();
+}
+
