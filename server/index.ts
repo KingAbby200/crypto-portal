@@ -102,3 +102,6 @@ app.use((req, res, next) => {
     },
   );
 })();
+
+// Export the app for Vercel serverless deployment
+export default app;

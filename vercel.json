@@ -2,11 +2,11 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "env": [
-    "DATABASE_URL",
-    "SESSION_SECRET",
-    "NODE_ENV"
-  ],
+  "env": {
+    "DATABASE_URL": "postgresql://neondb_owner:npg_b9pJr7KTYGcm@ep-rapid-band-a442x6hd-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require",
+    "SESSION_SECRET": "WoGHYu6Mb5dHohYOA3LuqmPQo9srVCYija3ocPMdrtU=",
+    "NODE_ENV": "production"
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
